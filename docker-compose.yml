@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentprobe
+      POSTGRES_PASSWORD: agentprobe
+      POSTGRES_DB: agentprobe
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentprobe"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  engine:
+    build:
+      context: ./engine
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  orchestrator:
+    build:
+      # Build from the repo root so the Dockerfile can copy both
+      # orchestrator/ and migrations/ (sqlx::migrate! needs the latter).
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    environment:
+      DATABASE_URL: postgres://agentprobe:agentprobe@postgres:5432/agentprobe
+      ENGINE_URL: http://engine:8000
+      RUST_LOG: info,orchestrator=debug
+      # Hard ceiling on total LLM calls per run (generate + judge across ALL
+      # agents). A multi-agent repo that would exceed this is truncated, not
+      # silently overspent. See orchestrator Budget::from_env.
+      AGENTPROBE_MAX_LLM_CALLS: "50"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      engine:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - orchestrator
+
+volumes:
+  pgdata:

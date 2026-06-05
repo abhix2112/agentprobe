@@ -1,0 +1,7 @@
+{
+  "graphs": {
+    "agent": "./src/memory_injected/graph.py:graph"
+  },
+  "dependencies": ["."],
+  "env": ".env"
+}
