@@ -38,6 +38,16 @@ pub enum Severity {
     High,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DetectionMethod {
+    ToolCall,
+    OutputContains,
+    OutputAbsent,
+    ErrorOrCrash,
+    JudgeOnly,
+}
+
 // ---------------------------------------------------------------------------
 // Core shapes
 // ---------------------------------------------------------------------------
@@ -68,6 +78,23 @@ pub struct IntrospectResult {
     pub agents: Vec<AgentSpec>,
 }
 
+/// How a scorer detects this test's failure from the agent's runtime output.
+/// Empty-string fields are "not applicable" for the chosen method. Transient
+/// generate->score data — NOT persisted to `test_results`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Detection {
+    pub method: DetectionMethod,
+    #[serde(default)]
+    pub tool_name: String,
+    #[serde(default)]
+    pub arg_name: String,
+    #[serde(default)]
+    pub arg_pattern: String,
+    #[serde(default)]
+    pub needle: String,
+    pub rationale: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestCase {
     pub id: String,
@@ -75,6 +102,7 @@ pub struct TestCase {
     pub prompt: String,
     pub expected_failure_mode: String,
     pub severity: Severity,
+    pub detection: Detection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

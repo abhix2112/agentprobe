@@ -39,6 +39,14 @@ class Severity(str, Enum):
     high = "high"
 
 
+class DetectionMethod(str, Enum):
+    tool_call = "tool_call"
+    output_contains = "output_contains"
+    output_absent = "output_absent"
+    error_or_crash = "error_or_crash"
+    judge_only = "judge_only"
+
+
 # ---------------------------------------------------------------------------
 # Core shapes
 # ---------------------------------------------------------------------------
@@ -68,12 +76,27 @@ class IntrospectResult(BaseModel):
     agents: list[AgentSpec]
 
 
+class Detection(BaseModel):
+    """How a scorer should detect this test's failure from the agent's runtime
+    output. `tool_name`/`arg_name`/`arg_pattern`/`needle` use "" when not
+    applicable to the chosen method. Transient generate->score data — NOT
+    persisted to test_results."""
+
+    method: DetectionMethod
+    tool_name: str = ""
+    arg_name: str = ""
+    arg_pattern: str = ""  # regex; validated to compile at generation time
+    needle: str = ""
+    rationale: str
+
+
 class TestCase(BaseModel):
     id: str
     category: Category
     prompt: str
     expected_failure_mode: str
     severity: Severity
+    detection: Detection
 
 
 class RunResult(BaseModel):

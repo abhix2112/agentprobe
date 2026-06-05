@@ -19,7 +19,7 @@ from .contract import (
     ScoreRequest,
     ScoreResponse,
 )
-from .generate import generate_test_cases
+from .generate import GenerationFailed, generate_test_cases
 from .introspect import AgentNotFound
 
 app = FastAPI(title="agentprobe engine", version="0.1.0")
@@ -53,7 +53,16 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     API calls made (0 on the offline path) so the orchestrator reconciles its
     run-level budget against the real count.
     """
-    test_cases, llm_calls = generate_test_cases(req.agent_spec)
+    try:
+        test_cases, llm_calls = generate_test_cases(req.agent_spec)
+    except GenerationFailed as exc:
+        # The model could not produce a valid, grounded battery. Fail honestly
+        # (502) rather than returning boilerplate; the orchestrator marks the run
+        # as errored. `llm_calls` spent is reported in the detail for accounting.
+        raise HTTPException(
+            status_code=502,
+            detail={"error": exc.message, "llm_calls": exc.llm_calls},
+        ) from exc
     return GenerateResponse(test_cases=test_cases, llm_calls=llm_calls)
 
 

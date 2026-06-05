@@ -108,14 +108,25 @@ async fn create_run(
     .await?;
 
     // The full pipeline (clone → introspect → generate → run → score) runs in
-    // the background. The engine endpoints are stubbed for now, so this just
-    // exercises the wiring end-to-end.
+    // the background. On failure (e.g. the engine cannot produce a valid grounded
+    // battery and returns 502 / GenerationFailed), the run is marked `error`
+    // honestly rather than left hanging.
     let bg = state.clone();
     let repo_url = req.repo_url.clone();
     let framework = req.framework;
     tokio::spawn(async move {
-        if let Err(e) = run_pipeline(bg, id, repo_url, framework).await {
+        if let Err(e) = run_pipeline(bg.clone(), id, repo_url, framework).await {
             tracing::error!("run {id} failed: {e:#}");
+            let reason = format!("{e:#}");
+            let _ = sqlx::query(
+                r#"UPDATE runs
+                   SET status = 'error', summary = $2
+                   WHERE id = $1"#,
+            )
+            .bind(id)
+            .bind(serde_json::json!({ "summary": format!("run failed: {reason}") }))
+            .execute(&bg.db)
+            .await;
         }
     });
 
@@ -279,11 +290,19 @@ const GENERATE_ESTIMATE: u32 = 1;
 /// Pre-call RESERVATION per test case judged in /score, reconciled to the real
 /// `llm_calls` after scoring.
 ///
-/// LOCKED DESIGN: when /score becomes real it makes exactly ONE LLM call per
-/// test case — the judge is never batched across cases. Per-test judging is
+/// LOCKED DESIGN (1/2): when /score becomes real it makes exactly ONE LLM call
+/// per test case — the judge is never batched across cases. Per-test judging is
 /// more reliable than scoring N cases in one call, and it keeps this estimate
 /// exact (reservation == real cost), so reconciliation is a no-op in the happy
 /// path. Do not change this to a batched judge.
+///
+/// LOCKED DESIGN (2/2) — deterministic-into-judge override: /score computes the
+/// per-test `TestCase.detection` signal deterministically from the RunResult,
+/// then makes its one judge call with that signal as evidence. If a deterministic
+/// signal FIRES on a `high`-severity case, that is GROUND TRUTH — the test is
+/// `passed = false` and the judge may only write the explanation; it CANNOT
+/// overturn it to PASS. If the signal does not fire (or method is judge_only),
+/// the judge's verdict stands.
 const JUDGE_ESTIMATE: u32 = 1;
 
 /// Run-level budget: a single shared ceiling on LLM calls across all agents.

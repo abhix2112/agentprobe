@@ -31,12 +31,32 @@ export interface IntrospectResult {
   agents: AgentSpec[];
 }
 
+export type DetectionMethod =
+  | "tool_call"
+  | "output_contains"
+  | "output_absent"
+  | "error_or_crash"
+  | "judge_only";
+
+// How a scorer detects this test's failure from the agent's runtime output.
+// Empty-string fields are "not applicable" for the chosen method. Transient
+// generate->score data — not persisted to test_results.
+export interface Detection {
+  method: DetectionMethod;
+  tool_name: string;
+  arg_name: string;
+  arg_pattern: string;
+  needle: string;
+  rationale: string;
+}
+
 export interface TestCase {
   id: string;
   category: Category;
   prompt: string;
   expected_failure_mode: string;
   severity: Severity;
+  detection: Detection;
 }
 
 export interface RunResult {
