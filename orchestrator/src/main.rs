@@ -1,5 +1,6 @@
 mod contract;
 mod engine;
+mod sandbox;
 
 use std::time::Duration;
 
@@ -178,6 +179,7 @@ async fn run_pipeline(
             ));
             break 'agents;
         }
+        let spec = agent.clone(); // kept for the sandbox run step (generate consumes `agent`)
         let generated = state.engine.generate(agent).await?;
         budget.reconcile(GENERATE_ESTIMATE, generated.llm_calls);
         let mut test_cases = generated.test_cases;
@@ -201,19 +203,12 @@ async fn run_pipeline(
         budget.spend(judge_reservation); // reserve; reconciled after /score
         tested_agents += 1;
 
-        // 3. run each test in the sandbox (stubbed: echo a passing result)
+        // 3. run each test in the sandbox: bounded-concurrent, 60s/test, errored
+        //    set explicitly on crash/timeout. Mode via AGENTPROBE_SANDBOX
+        //    (mock default keeps this key-free; local/e2b for real execution).
         set_status(&state.db, run_id, "running").await?;
-        let results: Vec<contract::RunResult> = test_cases
-            .iter()
-            .map(|tc| contract::RunResult {
-                test_case_id: tc.id.clone(),
-                agent_output: "(stubbed sandbox output)".into(),
-                tool_calls: vec![],
-                passed: true,
-                failure_reason: None,
-                errored: false, // real value comes from the E2B sandbox runner
-            })
-            .collect();
+        let sandbox = sandbox::Sandbox::from_env();
+        let results = sandbox.run_battery(&spec, &repo_path, &test_cases).await;
 
         // 4. score (judge) — reconcile the reservation to the real judge calls.
         set_status(&state.db, run_id, "scoring").await?;

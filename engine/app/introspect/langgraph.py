@@ -100,15 +100,37 @@ def _locate_entrypoint(
         except (OSError, ValueError):
             pass
 
-    # 2. Fall back to scanning for `X = create_react_agent(...)` / `.compile()`.
+    # 2a. Prefer a prebuilt `X = create_react_agent(...)` assignment.
     for mod in modules:
         for node in ast.walk(mod.tree):
             if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
-                fname = base.call_func_name(node.value)
-                if fname == "create_react_agent" or fname == "compile":
+                if base.call_func_name(node.value) == "create_react_agent":
                     if node.targets and isinstance(node.targets[0], ast.Name):
                         rel = os.path.relpath(mod.path, repo_path)
                         return rel, node.targets[0].id
+
+    # 2b. Else `X = <builder>.compile(...)` where <builder> = StateGraph(...) etc.
+    #     Matching the builder receiver excludes unrelated `.compile()` calls
+    #     such as `re.compile(...)`.
+    for mod in modules:
+        builders: set[str] = set()
+        for node in ast.walk(mod.tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                if base.call_func_name(node.value) in {"StateGraph", "MessageGraph", "Graph"}:
+                    if node.targets and isinstance(node.targets[0], ast.Name):
+                        builders.add(node.targets[0].id)
+        for node in ast.walk(mod.tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                call = node.value
+                if (
+                    base.call_func_name(call) == "compile"
+                    and isinstance(call.func, ast.Attribute)
+                    and base.last_name(call.func.value) in builders
+                    and node.targets
+                    and isinstance(node.targets[0], ast.Name)
+                ):
+                    rel = os.path.relpath(mod.path, repo_path)
+                    return rel, node.targets[0].id
 
     raise AgentNotFound(
         "couldn't locate a LangGraph agent — no langgraph.json and no "

@@ -65,6 +65,17 @@ def test_langgraph_memory_injected_excludes_injected_args():
     assert "long-term memory" in (spec.system_prompt or "")
 
 
+def test_langgraph_create_react_agent_not_confused_by_re_compile():
+    # The e2e react_fake agent has a module-level `_PATH_RE = re.compile(...)`;
+    # the entrypoint scan must pick `graph = create_react_agent(...)`, not the
+    # regex (the `.compile()` heuristic must not match `re.compile`).
+    e2e = os.path.join(os.path.dirname(__file__), "e2e", "react_fake")
+    spec = introspect(e2e, Framework.langgraph).agents[0]
+    assert spec.agent_variable_name == "graph"
+    assert spec.entry_file == "agent.py"
+    assert {t.name for t in spec.tools} == {"read_file"}
+
+
 def test_langgraph_prebuilt_calc_fallback_no_config():
     # No langgraph.json -> falls back to scanning for create_react_agent(...)
     spec = only_agent(Framework.langgraph, fx("langgraph", "prebuilt_calc"))
