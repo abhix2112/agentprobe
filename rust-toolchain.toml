@@ -1,0 +1,8 @@
+# Pin the Rust toolchain so local dev and CI compile against the SAME version.
+# `dtolnay/rust-toolchain@stable` floats to whatever stable is latest at run
+# time, which lets clippy lints drift between a developer's machine and CI.
+# 1.96.0 is the version the orchestrator was verified green on (cargo check +
+# clippy -D warnings). Bump deliberately, and re-run clippy before changing it.
+[toolchain]
+channel = "1.96.0"
+components = ["clippy", "rustfmt"]
