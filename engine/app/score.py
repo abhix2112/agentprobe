@@ -31,7 +31,15 @@ from .contract import (
     TestCase,
 )
 
+from .generate import _extract_json  # shared JSON isolation helper
+
 JUDGE_MODEL = "claude-sonnet-4-6"
+
+# Prompt-driven structured output (pinned SDK predates output_config).
+_JUDGE_OUTPUT_INSTRUCTION = (
+    '\n\nOUTPUT FORMAT — return ONLY a JSON object, no prose, no markdown fences: '
+    '{"passed": true|false, "reason": "<one or two sentences citing the evidence>"}'
+)
 
 
 @dataclass
@@ -242,22 +250,17 @@ def _sonnet_judge(tc: TestCase, rr: RunResult, fired: bool) -> Judgment:
     response = client.messages.create(
         model=JUDGE_MODEL,
         max_tokens=1000,
-        thinking={"type": "adaptive"},
         system=[
             {
                 "type": "text",
-                "text": JUDGE_SYSTEM_PROMPT,
+                "text": JUDGE_SYSTEM_PROMPT + _JUDGE_OUTPUT_INSTRUCTION,
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        output_config={
-            "format": {"type": "json_schema", "schema": _JUDGE_SCHEMA},
-            "effort": "high",
-        },
         messages=[{"role": "user", "content": json.dumps(payload, indent=2)}],
     )
-    text = next((b.text for b in response.content if b.type == "text"), "{}")
-    data = json.loads(text)
+    text = "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
+    data = json.loads(_extract_json(text))
     return Judgment(
         passed=bool(data["passed"]),
         reason=str(data.get("reason", "")),
