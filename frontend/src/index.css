@@ -3,17 +3,53 @@
 @tailwind utilities;
 
 :root {
-  --background: 240 10% 4%;
-  --foreground: 0 0% 98%;
-  --muted: 240 4% 16%;
-  --muted-foreground: 240 5% 65%;
-  --card: 240 6% 10%;
-  --border: 240 4% 20%;
-  --primary: 263 70% 60%;
+  /* Linear/Vercel-style near-black dark theme. */
+  --background: 240 6% 5%;        /* page #0c0c0d */
+  --surface: 240 6% 8%;          /* cards #141416 */
+  --surface-2: 240 5% 11%;       /* raised */
+  --foreground: 0 0% 96%;
+  --muted: 240 5% 16%;
+  --muted-foreground: 240 5% 60%;
+  --border: 240 5% 16%;
+  --border-strong: 240 5% 24%;
+  --primary: 245 80% 65%;        /* indigo/violet accent */
   --primary-foreground: 0 0% 100%;
+  --success: 152 60% 45%;
+  --danger: 0 72% 58%;
+  --warning: 38 92% 55%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
-  @apply bg-background text-foreground;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  @apply bg-background text-foreground antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+/* subtle radial glow behind the header for the "product" feel */
+.app-glow {
+  background:
+    radial-gradient(60rem 30rem at 50% -10rem, hsl(245 80% 60% / 0.10), transparent 70%);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-strong));
+  border-radius: 9999px;
 }

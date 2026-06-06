@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/runs", post(create_run))
+        .route("/runs", post(create_run).get(list_runs))
         .route("/runs/:id", get(get_run))
         .with_state(state)
         .layer(CorsLayer::permissive())
@@ -140,12 +140,19 @@ async fn create_run(
 async fn run_pipeline(
     state: AppState,
     run_id: Uuid,
-    _repo_url: String,
+    repo_url: String,
     framework: Framework,
 ) -> anyhow::Result<()> {
-    // 1. clone (stubbed path) + introspect → list of agents to test.
+    // 1. clone the repo into a per-run work dir (a local path is copied; a URL
+    //    is git-cloned). Engine + sandbox read this same path.
+    set_status(&state.db, run_id, "cloning").await?;
+    let work = std::env::var("AGENTPROBE_WORK_DIR")
+        .unwrap_or_else(|_| "/tmp/agentprobe-clones".into());
+    let repo_path = format!("{work}/{run_id}");
+    clone_repo(&repo_url, &repo_path).await?;
+
+    // 2. introspect → list of agents to test.
     set_status(&state.db, run_id, "introspecting").await?;
-    let repo_path = format!("/work/clones/{run_id}");
     let introspected = state.engine.introspect(&repo_path, framework).await?;
     if introspected.agents.is_empty() {
         anyhow::bail!("introspection returned no agents");
@@ -280,6 +287,32 @@ async fn run_pipeline(
     Ok(())
 }
 
+/// Clone the target repo into `dest`. A local directory is copied (`cp -r`); a
+/// URL is shallow git-cloned. The engine and the sandbox both read `dest`.
+async fn clone_repo(repo_url: &str, dest: &str) -> anyhow::Result<()> {
+    if let Some(parent) = std::path::Path::new(dest).parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    if tokio::fs::metadata(repo_url).await.map(|m| m.is_dir()).unwrap_or(false) {
+        let status = tokio::process::Command::new("cp")
+            .args(["-r", repo_url, dest])
+            .status()
+            .await?;
+        if !status.success() {
+            anyhow::bail!("failed to copy local repo {repo_url}");
+        }
+    } else {
+        let status = tokio::process::Command::new("git")
+            .args(["clone", "--depth", "1", repo_url, dest])
+            .status()
+            .await?;
+        if !status.success() {
+            anyhow::bail!("git clone failed for {repo_url}");
+        }
+    }
+    Ok(())
+}
+
 /// Pre-call RESERVATION for one /generate call, reconciled afterward to the
 /// real `llm_calls` the engine reports. Used only to gate the budget.
 const GENERATE_ESTIMATE: u32 = 1;
@@ -364,6 +397,18 @@ async fn set_status(db: &PgPool, id: Uuid, status: &str) -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 // GET /runs/:id — fetch a run + its results
 // ---------------------------------------------------------------------------
+
+/// GET /runs — recent runs for the dashboard table (newest first).
+async fn list_runs(State(state): State<AppState>) -> Result<Json<Vec<RunRow>>, AppError> {
+    let runs = sqlx::query_as::<_, RunRow>(
+        r#"SELECT id, repo_url, framework, status, created_at, overall_passed, summary,
+                  truncated, truncated_reason
+           FROM runs ORDER BY created_at DESC LIMIT 50"#,
+    )
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(runs))
+}
 
 async fn get_run(
     State(state): State<AppState>,
