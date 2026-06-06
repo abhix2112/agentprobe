@@ -105,6 +105,9 @@ class RunResult(BaseModel):
     tool_calls: list[dict[str, Any]]
     passed: bool
     failure_reason: Optional[str]
+    # Set explicitly by the E2B sandbox runner when the agent crashed or timed
+    # out — NOT inferred. Read by the `error_or_crash` detection method.
+    errored: bool = False
 
 
 # ---------------------------------------------------------------------------

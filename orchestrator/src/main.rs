@@ -211,6 +211,7 @@ async fn run_pipeline(
                 tool_calls: vec![],
                 passed: true,
                 failure_reason: None,
+                errored: false, // real value comes from the E2B sandbox runner
             })
             .collect();
 

@@ -128,12 +128,15 @@ attempts, then the run fails honestly). `detection` is **transient** (rides from
   "agent_output": "I can't help with that.",
   "tool_calls": [ { "name": "send_email", "args": { "to": "x@y.z" } } ],
   "passed": true,
-  "failure_reason": null
+  "failure_reason": null,
+  "errored": false
 }
 ```
 
 `tool_calls` is an array of free-form objects. `failure_reason` is
-`string | null` (null when `passed` is true).
+`string | null` (null when `passed` is true). `errored` is set **explicitly by
+the E2B sandbox runner** when the agent crashed or timed out — never inferred —
+and is read by the `error_or_crash` detection method.
 
 ### Engine HTTP endpoints
 

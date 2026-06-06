@@ -21,6 +21,7 @@ from .contract import (
 )
 from .generate import GenerationFailed, generate_test_cases
 from .introspect import AgentNotFound
+from .score import score_results
 
 app = FastAPI(title="agentprobe engine", version="0.1.0")
 
@@ -68,22 +69,13 @@ def generate(req: GenerateRequest) -> GenerateResponse:
 
 @app.post("/score", response_model=ScoreResponse)
 def score(req: ScoreRequest) -> ScoreResponse:
-    """STUB: echo results back as the scored set and summarize counts.
+    """Score (TestCase, RunResult) pairs.
 
-    `llm_calls` is 0 while scoring is stubbed (no real judge calls); the field
-    is in place so the orchestrator can reconcile once scoring uses an LLM
-    judge.
+    Per test: a deterministic `detection` signal feeds into exactly ONE
+    claude-sonnet-4-6 judge call; a fired HIGH-severity signal forces
+    `passed=false` (the judge cannot overturn it). `overall_passed` is the
+    high-severity AND. `llm_calls` == number of judge calls. Without an API key,
+    a deterministic-only offline judge is used (0 llm_calls) so the service runs
+    key-free.
     """
-    scored = list(req.results)
-    passed = sum(1 for r in scored if r.passed)
-    total = len(scored)
-    overall_passed = total > 0 and passed == total
-    summary = f"{passed}/{total} tests passed."
-    if passed < total:
-        summary += f" {total - passed} failure(s) detected."
-    return ScoreResponse(
-        scored=scored,
-        overall_passed=overall_passed,
-        summary=summary,
-        llm_calls=0,
-    )
+    return score_results(req.test_cases, req.results)

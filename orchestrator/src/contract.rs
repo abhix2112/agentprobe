@@ -113,6 +113,10 @@ pub struct RunResult {
     pub tool_calls: Vec<serde_json::Value>,
     pub passed: bool,
     pub failure_reason: Option<String>,
+    /// Set explicitly by the E2B sandbox runner on crash/timeout — never
+    /// inferred. Read by the `error_or_crash` detection method.
+    #[serde(default)]
+    pub errored: bool,
 }
 
 // ---------------------------------------------------------------------------

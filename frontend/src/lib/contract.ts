@@ -65,6 +65,9 @@ export interface RunResult {
   tool_calls: Record<string, unknown>[];
   passed: boolean;
   failure_reason: string | null;
+  // Set explicitly by the E2B sandbox runner on crash/timeout — never inferred.
+  // Read by the `error_or_crash` detection method.
+  errored: boolean;
 }
 
 // Engine endpoint responses (POST /generate, POST /score). `llm_calls` is the
