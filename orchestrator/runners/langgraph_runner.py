@@ -70,5 +70,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("ANTHROPIC_API_KEY", "")  # don't let import-time checks abort
+    # The agent-under-test reads ANTHROPIC_API_KEY (and any other secrets, e.g.
+    # TAVILY_API_KEY) from the environment inherited from the orchestrator/
+    # sandbox subprocess. We deliberately do NOT default the key to "" — a
+    # missing key must surface as a real auth error, not be silently masked.
     main()
