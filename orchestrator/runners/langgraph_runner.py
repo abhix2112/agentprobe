@@ -61,10 +61,20 @@ def main() -> None:
         repo_path, entry_file, variable = sys.argv[1], sys.argv[2], sys.argv[3]
         prompt = sys.stdin.read()
         agent = _load_agent(repo_path, entry_file, variable)
+        inp = {"messages": [{"role": "user", "content": prompt}]}
         # Use the ASYNC API: real LangGraph agents commonly have `async def`
         # nodes (e.g. the official react-agent's `call_model`), which raise on a
         # synchronous .invoke(). ainvoke also handles purely-sync graphs.
-        state = asyncio.run(agent.ainvoke({"messages": [{"role": "user", "content": prompt}]}))
+        #
+        # Agents on the newer LangGraph Runtime API read config from
+        # `runtime.context` (e.g. react-agent's model/system_prompt); invoking
+        # without a context makes `runtime.context` None -> AttributeError.
+        # Passing context={} supplies the context_schema's defaults. Older
+        # graphs (no context= kwarg) raise TypeError -> fall back.
+        try:
+            state = asyncio.run(agent.ainvoke(inp, context={}))
+        except TypeError:
+            state = asyncio.run(agent.ainvoke(inp))
         messages = state["messages"] if isinstance(state, dict) else state
         result["output"] = _final_output(messages)
         result["tool_calls"] = _collect_tool_calls(messages)

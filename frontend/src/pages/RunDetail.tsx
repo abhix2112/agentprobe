@@ -3,8 +3,10 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { PipelineStepper } from "@/components/PipelineStepper";
 import { VerdictBanner } from "@/components/VerdictBanner";
+import { Scoreboard } from "@/components/Scoreboard";
+import { VerdictSummary } from "@/components/VerdictSummary";
 import { CategoryCards } from "@/components/CategoryCards";
-import { FailureList } from "@/components/FailureList";
+import { TestResults } from "@/components/TestResults";
 import { getRun } from "@/lib/api";
 import { isTerminal } from "@/lib/status";
 import type { RunReport } from "@/lib/contract";
@@ -90,6 +92,13 @@ export default function RunDetail() {
 
       {done && run.status === "done" && (
         <div className="space-y-6">
+          <Scoreboard
+            total={results.length}
+            passed={results.length - failures.length}
+            failed={failures.length}
+            highFailed={highFailed}
+          />
+
           <VerdictBanner
             passed={run.overall_passed}
             total={results.length}
@@ -99,6 +108,8 @@ export default function RunDetail() {
             truncatedReason={run.truncated_reason}
           />
 
+          <VerdictSummary results={results} />
+
           <section>
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Coverage by category</h2>
             <CategoryCards results={results} />
@@ -106,14 +117,17 @@ export default function RunDetail() {
 
           <section>
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              Failures
+              Test results
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {results.length}
+              </span>
               {failures.length > 0 && (
                 <span className="rounded-full bg-danger/15 px-2 py-0.5 text-xs text-danger">
-                  {failures.length}
+                  {failures.length} failed
                 </span>
               )}
             </h2>
-            <FailureList failures={failures} />
+            <TestResults results={results} />
           </section>
         </div>
       )}
